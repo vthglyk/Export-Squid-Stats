@@ -47,6 +47,7 @@ import time
 import argparse
 import logging
 import re
+import numpy as np
 
 from subprocess import check_output
 from prometheus_client import start_http_server, Gauge
@@ -56,8 +57,12 @@ client_address = None
 
 
 def parse_logs(log_file, last_pos):
+    tcp_hit_string = "TCP_HIT"
+    tcp_miss_string = "TCP_MISS"
     sibling_hits_string = "SIBLING_HIT"
-    sibling_hits = 0
+    sibling_hits_times = []
+    local_hits_times = []
+    miss_times = []
 
     with open(log_file, 'r') as f:
         f.seek(last_pos)
@@ -67,11 +72,18 @@ def parse_logs(log_file, last_pos):
         for i in new_data:
             parts = i.split()
 
-            if len(parts) >= 8 and sibling_hits_string in parts[8]:
-                sibling_hits += 1
-                logging.info("Found SIBLING_HIT (sibling hits in this round = {})".format(sibling_hits))
+            if len(parts) >= 9:
+                if tcp_hit_string in parts[3]:
+                    local_hits_times.append(int(parts[1]))
+                    logging.info("Found LOCAL_HIT (local hits in this round = {})".format(local_hits_times))
+                elif sibling_hits_string in parts[8]:
+                    sibling_hits_times.append(int(parts[1]))
+                    logging.info("Found SIBLING_HIT (sibling hits in this round = {})".format(sibling_hits_times))
+                elif tcp_miss_string in parts[3]:
+                    miss_times.append(int(parts[1]))
+                    logging.info("Found MISS (misses in this round = {})".format(miss_times))
 
-    return [sibling_hits, last_pos]
+    return [local_hits_times, sibling_hits_times, miss_times, last_pos]
 
 
 def extract_metric(output, metric):
@@ -112,8 +124,14 @@ def main():
     squid_log_file = args.file
     period = args.period
 
-    sibling_hits = 0
     last_pos = 0
+    mean_local_hit_times = 0
+    mean_sibling_hit_times = 0
+    mean_miss_times = 0
+
+    total_local_hits = 0
+    total_sibling_hits = 0
+    total_misses = 0
 
     log_level_numeric = getattr(logging, log_level.upper(), None)
     if not isinstance(log_level_numeric, int):
@@ -152,16 +170,22 @@ def main():
                                                     '"cacheProtoClientHttpRequests" of squid'))
     cache_http_hits_gauge = Gauge('cache_http_hits',
                                   'Advertises the value of the metric "cacheHttpHits" of squid')
-    cache_sibling_hits_gauge = Gauge('sibling_hits',
+    cache_peering_hits_gauge = Gauge('sibling_hits',
                                      'Advertises the value of the hits in the peering cache')
     cache_total_hits_gauge = Gauge('total_hits',
                                    'Advertises the value of the total hits in the vCache (local + peering)')
     cache_local_hit_ratio_gauge = Gauge('local_hit_ratio',
                                         'Hit ratio due to local hits')
-    cache_peering_hit_ratio_gauge = Gauge('peering_hit_ratio',
+    cache_peering_hit_ratio_gauge = Gauge('sibling_hit_ratio',
                                           'Hit ratio due to peering hits')
     cache_total_hit_ratio_gauge = Gauge('total_hit_ratio',
                                         'Total cache hit ratio (local + peering)')
+    cache_local_hits_mean_time_gauge = Gauge('local_hits_mean_time',
+                                             'Mean time of local hits')
+    cache_peering_hits_mean_time_gauge = Gauge('peering_hits_mean_time',
+                                               'Mean time of peering hits')
+    cache_misses_mean_time_gauge = Gauge('misses_mean_time',
+                                         'Mean time of misses')
     node_cpu_gauge = Gauge('node_cpu', 'Advertises the cpu usage', ['cpu', 'mode'])
 
     # Todo:
@@ -170,12 +194,38 @@ def main():
 
         time.sleep(period)
 
-        [new_sibling_hits, last_pos] = parse_logs(squid_log_file, last_pos)
-        sibling_hits += new_sibling_hits
-        logging.info("Total number of sibling hits = {})".format(sibling_hits))
+        [new_local_hits_times, new_sibling_hits_times, new_miss_times, last_pos] = parse_logs(squid_log_file, last_pos)
 
-        cache_client_http_hits = extract_metric(output, "cacheClientHttpHits")
-        cache_client_http_requests = extract_metric(output, "cacheClientHttpRequests")
+        if new_local_hits_times:
+            new_local_hits_times_avg = sum(new_local_hits_times) / float(len(new_local_hits_times))
+            logging.info("Mean new local hits times = " + str(new_local_hits_times_avg))
+            mean_local_hit_times = (total_local_hits * mean_local_hit_times + new_local_hits_times_avg *
+                                    len(new_local_hits_times)) / (total_local_hits + len(new_local_hits_times))
+            total_local_hits += len(new_local_hits_times)
+
+        if new_sibling_hits_times:
+            new_sibling_hits_times_avg = sum(new_sibling_hits_times) / float(len(new_sibling_hits_times))
+            logging.info("Mean new sibling hits times = " + str(new_sibling_hits_times_avg))
+            mean_sibling_hit_times = (total_sibling_hits * mean_sibling_hit_times + new_sibling_hits_times_avg *
+                                      len(new_sibling_hits_times)) / (total_sibling_hits + len(new_sibling_hits_times))
+            total_sibling_hits += len(new_sibling_hits_times)
+
+        if new_miss_times:
+            new_miss_times_avg = sum(new_miss_times) / float(len(new_miss_times))
+            logging.info("Mean new miss times = " + str(new_miss_times_avg))
+            mean_miss_times = (total_misses * mean_miss_times + new_miss_times_avg * len(new_miss_times)) / \
+                              (total_misses + len(new_miss_times))
+            total_misses += len(new_miss_times)
+
+        logging.info("Mean total local hits times = {})".format(mean_local_hit_times))
+        logging.info("Mean total sibling hits times = {})".format(mean_sibling_hit_times))
+        logging.info("Mean total miss times = {})".format(mean_miss_times))
+        logging.info("Total number of local hits = {})".format(total_local_hits))
+        logging.info("Total number of sibling hits = {})".format(total_sibling_hits))
+        logging.info("Total number of misses = {})".format(total_misses))
+
+        # cache_client_http_hits = extract_metric(output, "cacheClientHttpHits")
+        # cache_client_http_requests = extract_metric(output, "cacheClientHttpRequests")
 
         # output = check_output(["snmpwalk", "-v", "1", "-c", "public", "-m", "SQUID-MIB", "-Cc",
         #                        "localhost:3401", "squid"])
@@ -194,11 +244,14 @@ def main():
         # cache_num_obj_count_gauge.set(extract_metric(output, "cacheNumObjCount"))
         # cache_proto_client_http_requests_gauge.set(extract_metric(output, "cacheProtoClientHttpRequests"))
         # cache_http_hits_gauge.set(extract_metric(output, "cacheHttpHits"))
-        # cache_sibling_hits_gauge.set(sibling_hits)
+        # cache_peering_hits_gauge.set(sibling_hits)
         # cache_total_hits_gauge.set(sibling_hits + cache_client_http_hits)
-        # cache_local_hit_ratio_gauge.set(cache_client_http_hits / cache_client_http_requests)
-        # cache_peering_hit_ratio_gauge.set(sibling_hits / cache_client_http_requests)
-        # cache_total_hit_ratio_gauge.set((cache_client_http_hits + sibling_hits) / cache_client_http_requests)
+        # cache_local_hit_ratio_gauge.set(cache_client_http_hits / float(cache_client_http_requests))
+        # cache_peering_hit_ratio_gauge.set(sibling_hits / float(cache_client_http_requests))
+        # cache_total_hit_ratio_gauge.set((cache_client_http_hits + sibling_hits) / float(cache_client_http_requests))
+        # cache_local_hits_mean_time_gauge.set(mean_local_hit_times)
+        # cache_peering_hits_mean_time_gauge.set(mean_sibling_hit_times)
+        # cache_misses_mean_time_gauge.set(mean_miss_times)
 
         output = check_output(["top", "-b", "-n1"])
         logging.debug("output = " + str(output))
