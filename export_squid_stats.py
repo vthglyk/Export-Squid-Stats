@@ -133,12 +133,21 @@ def main():
     total_misses = 0
 
     previous_cache_client_http_requests = 0
-    previous_cache_client_icp_request = 0
+    previous_cache_client_icp_requests = 0
 
     log_level_numeric = getattr(logging, log_level.upper(), None)
     if not isinstance(log_level_numeric, int):
         raise ValueError('Invalid log level: %s' % log_level)
     logging.basicConfig(level=log_level_numeric)
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+
+    file_handler = logging.FileHandler("logs/server.log")
+    root_logger.addHandler(file_handler)
+
+    console_handler = logging.StreamHandler()
+    root_logger.addHandler(console_handler)
 
     start_http_server(9101)
     # Generate some requests.
@@ -198,8 +207,6 @@ def main():
                                           'Request rate of peer')
     node_cpu_gauge = Gauge('node_cpu', 'Advertises the cpu usage', ['cpu', 'mode'])
 
-    # Todo:
-
     while True:
 
         logging.info("Woke up")
@@ -227,22 +234,22 @@ def main():
                               (total_misses + len(new_miss_times))
             total_misses += len(new_miss_times)
 
-        logging.info("Mean total local hits times = {})".format(mean_local_hit_times))
-        logging.info("Mean total sibling hits times = {})".format(mean_sibling_hit_times))
-        logging.info("Mean total miss times = {})".format(mean_miss_times))
-        logging.info("Total number of local hits = {})".format(total_local_hits))
-        logging.info("Total number of sibling hits = {})".format(total_sibling_hits))
-        logging.info("Total number of misses = {})".format(total_misses))
+        logging.info("Mean total local hits times = {}".format(mean_local_hit_times))
+        logging.info("Mean total sibling hits times = {}".format(mean_sibling_hit_times))
+        logging.info("Mean total miss times = {}".format(mean_miss_times))
+        logging.info("Total number of local hits = {}".format(total_local_hits))
+        logging.info("Total number of sibling hits = {}".format(total_sibling_hits))
+        logging.info("Total number of misses = {}".format(total_misses))
 
         output = check_output(["snmpwalk", "-v", "1", "-c", "public", "-m", "SQUID-MIB", "-Cc",
                                "localhost:3401", "squid"])
 
         new_cache_client_http_hits = extract_metric(output, "cacheClientHttpHits")
         new_cache_client_http_requests = extract_metric(output, "cacheClientHttpRequests")
-        new_cache_client_icp_request = extract_metric(output, "cacheClientIcpRequests")
+        new_cache_client_icp_requests = extract_metric(output, "cacheClientIcpRequests")
 
         client_request_rate = (new_cache_client_http_requests - previous_cache_client_http_requests) / float(period)
-        peer_request_rate = (new_cache_client_icp_request - previous_cache_client_icp_request) / float(period)
+        peer_request_rate = (new_cache_client_icp_requests - previous_cache_client_icp_requests) / float(period)
 
         logging.info("Client Request Rate = " + str(client_request_rate))
         logging.info("Peer Request Rate = " + str(peer_request_rate))
@@ -277,7 +284,7 @@ def main():
         cache_peer_request_rate_gauge.set(peer_request_rate)
 
         previous_cache_client_http_requests = new_cache_client_http_requests
-        previous_cache_client_icp_request = new_cache_client_icp_request
+        previous_cache_client_icp_requests = new_cache_client_icp_requests
 
         output = check_output(["top", "-b", "-n1"])
         logging.debug("output = " + str(output))
