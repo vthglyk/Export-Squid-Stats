@@ -182,28 +182,28 @@ def main():
     cache_http_hits_gauge = Gauge('cache_http_hits',
                                   'Advertises the value of the metric "cacheHttpHits" of squid')
 
-    cache_peering_hits_gauge = Gauge('sibling_hits',
+    cache_peering_hits_gauge = Gauge('cache_sibling_hits',
                                      'Advertises the value of the hits in the peering cache')
-    cache_total_hits_gauge = Gauge('total_hits',
+    cache_total_hits_gauge = Gauge('cache_total_hits',
                                    'Advertises the value of the total hits in the vCache (local + peering)')
 
-    cache_local_hit_ratio_gauge = Gauge('local_hit_ratio',
+    cache_local_hit_ratio_gauge = Gauge('cache_local_hit_ratio',
                                         'Hit ratio due to local hits')
-    cache_peering_hit_ratio_gauge = Gauge('sibling_hit_ratio',
+    cache_peering_hit_ratio_gauge = Gauge('cache_sibling_hit_ratio',
                                           'Hit ratio due to peering hits')
-    cache_total_hit_ratio_gauge = Gauge('total_hit_ratio',
+    cache_total_hit_ratio_gauge = Gauge('cache_total_hit_ratio',
                                         'Total cache hit ratio (local + peering)')
 
-    cache_local_hits_mean_time_gauge = Gauge('local_hits_mean_time',
+    cache_local_hits_mean_time_gauge = Gauge('cache_local_hits_mean_time',
                                              'Mean time of local hits')
-    cache_peering_hits_mean_time_gauge = Gauge('peering_hits_mean_time',
+    cache_peering_hits_mean_time_gauge = Gauge('cache_peering_hits_mean_time',
                                                'Mean time of peering hits')
-    cache_misses_mean_time_gauge = Gauge('misses_mean_time',
+    cache_misses_mean_time_gauge = Gauge('cache_misses_mean_time',
                                          'Mean time of misses')
 
-    cache_client_request_rate_gauge = Gauge('client_request_rate',
+    cache_client_request_rate_gauge = Gauge('cache_client_request_rate',
                                             'Request rate of clients')
-    cache_peer_request_rate_gauge = Gauge('peer_request_rate',
+    cache_peer_request_rate_gauge = Gauge('cache_peer_request_rate',
                                           'Request rate of peer')
     node_cpu_gauge = Gauge('node_cpu', 'Advertises the cpu usage', ['cpu', 'mode'])
 
