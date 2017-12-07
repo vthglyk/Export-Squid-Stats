@@ -272,9 +272,14 @@ def main():
         cache_peering_hits_gauge.set(total_sibling_hits)
         cache_total_hits_gauge.set(total_local_hits + total_sibling_hits)
 
-        cache_local_hit_ratio_gauge.set(total_local_hits / float(new_cache_client_http_requests))
-        cache_peering_hit_ratio_gauge.set(total_sibling_hits / float(new_cache_client_http_requests))
-        cache_total_hit_ratio_gauge.set((total_local_hits + total_sibling_hits) / float(new_cache_client_http_requests))
+        if new_cache_client_http_requests > 0:
+            cache_local_hit_ratio_gauge.set(total_local_hits / float(new_cache_client_http_requests))
+            cache_peering_hit_ratio_gauge.set(total_sibling_hits / float(new_cache_client_http_requests))
+            cache_total_hit_ratio_gauge.set((total_local_hits + total_sibling_hits) / float(new_cache_client_http_requests))
+        else:
+            cache_local_hit_ratio_gauge.set(0)
+            cache_peering_hit_ratio_gauge.set(0)
+            cache_total_hit_ratio_gauge.set(0)
 
         cache_local_hits_mean_time_gauge.set(mean_local_hit_times)
         cache_peering_hits_mean_time_gauge.set(mean_sibling_hit_times)
