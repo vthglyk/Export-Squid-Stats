@@ -99,11 +99,18 @@ def extract_metric(output, metric):
         return int(help[1].split("\n")[0])
 
 
+def find_peer_address():
+    with open("/usr/local/etc/squid/squid.conf") as f:
+        for line in f:
+            if "cache_peer" in line:
+                return line.split(" ")[1]
+
+    return None
+
+
 def main():
 
     parser = argparse.ArgumentParser(description='Export cache metrics to prometheus')
-    parser.add_argument('--peer_address', '-p', required=True,
-                        help='the ip address of the cache peer (REQUIRED)')
     parser.add_argument('--client_address', '-c', required=True,
                         help='the ip address of the client (REQUIRED)')
     parser.add_argument('--loglevel', '-l', default="WARNING",
@@ -117,7 +124,6 @@ def main():
     global peer_address
     global client_address
 
-    peer_address = args.peer_address
     client_address = args.client_address
     log_level = args.loglevel
     squid_log_file = args.file
@@ -208,8 +214,10 @@ def main():
     node_cpu_gauge = Gauge('node_cpu', 'Advertises the cpu usage', ['cpu', 'mode'])
 
     while True:
-
-        logging.info("Woke up")
+        peer_address = find_peer_address()
+        logging.debug("Woke up")
+        logging.debug("peer_address = " + peer_address)
+        logging.debug("client_address = " + client_address)
 
         [new_local_hits_times, new_sibling_hits_times, new_miss_times, last_pos] = parse_logs(squid_log_file, last_pos)
 
