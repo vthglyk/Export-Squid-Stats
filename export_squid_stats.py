@@ -57,6 +57,7 @@ client_address = None
 
 def parse_logs(log_file, last_pos):
     tcp_hit_string = "TCP_HIT"
+    tcp_mem_hit_string = "TCP_MEM_HIT"
     tcp_miss_string = "TCP_MISS"
     sibling_hits_string = "SIBLING_HIT"
     sibling_hits_times = []
@@ -72,7 +73,7 @@ def parse_logs(log_file, last_pos):
             parts = i.split()
 
             if len(parts) >= 9:
-                if tcp_hit_string in parts[3]:
+                if tcp_hit_string in parts[3] or tcp_mem_hit_string in parts[3]:
                     local_hits_times.append(int(parts[1]))
                     logging.info("Found LOCAL_HIT (local hits in this round = {})".format(local_hits_times))
                 elif sibling_hits_string in parts[8]:
